@@ -1,6 +1,6 @@
 // bare bones slash command handler for slack...
 
-// POST payloads from slack slash commands contain the following fields:
+// POST payloads from slack slash commands contain the following parameters:
 //
 //   user_name: shaunc
 //   trigger_id: 323566020866.140237611429.d0b91a86770f6d14f4f35304f6be858c
@@ -19,29 +19,30 @@
 function doPost(payload) {
 
   if (payload.parameter.token != slackToken()) {
-    var err = { text: '',
-                attachments: [ mkErrorAttachment('Verification failed.') ] };
+    var err = { text: "",
+                attachments: [ mkErrorAttachment("Verification failed.") ] };
 
     return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
   }
 
-  var user = payload.parameters.user_name;
-  var args = payload.parameters.text;
+  var uid = payload.parameter.user_id;
+  var uname = payload.parameter.user_name;
+  var args = payload.parameter.text;
 
-  switch (payload.command) {
-    case '/goal':
-      return goalHandler(user,args);
+  switch (payload.parameter.command) {
+    case "/goal":
+      return goalHandler(uid,uname,args);
       break;
-    case '/score':
-      return scoreHandler(user,args);
+    case "/score":
+      return scoreHandler(uid,uname,args);
       break;
   }
 
   // shouldn't be possible to end up here...
-  return ContentService.createTextOutput('Got POST on '+ new Date());
+  return ContentService.createTextOutput("Got POST on "+ new Date() + " for " + payload.parameter.command + ".");
 }
 
-function goalHandler(user,args) {
+function goalHandler(uid,uname,args) {
   // handler for /goal commands
 
   // possible variants:
@@ -53,10 +54,27 @@ function goalHandler(user,args) {
   //
   // so, args should be a string like: "<@U444CRH8S|shaunc> shaun's new goal"
 
-  return ContentService.createTextOutput('user: ' + user + ', args: ' + args + '.');
+  var goal = "undefined";
+
+  var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
+  if (re.test(args)) {
+    re = /.*<@(U\w+)\|(\w+)>\s*(.*)?/; // regexp
+    var tokens = re.exec(args);
+
+    uid = tokens[1];
+    uname = tokens[2];
+    goal = tokens[3];
+  } else {
+    re = /\s*(.*)?/; // regexp
+    var tokens = re.exec(args);
+
+    goal = tokens[1];
+  }
+
+  return ContentService.createTextOutput("uid: " + uid + ", uname: " + uname + ", args: " + args + ", goal: " + goal + ".");
 }
 
-function scoreHandler(user,args) {
+function scoreHandler(uid,uname,args) {
   // handler for /score commands
 
   // possible variants:
@@ -68,8 +86,8 @@ function scoreHandler(user,args) {
 
 function mkErrorAttachment(msg) {
   return ({
-    color: 'danger',
-    text: '*Error*:\n' + msg,
-    mrkdwn_in: ['text']
+    color: "danger",
+    text: "*Error*:\n" + msg,
+    mrkdwn_in: ["text"]
   })
 }
