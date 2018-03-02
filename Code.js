@@ -54,24 +54,46 @@ function goalHandler(uid,uname,args) {
   //
   // so, args should be a string like: "<@U444CRH8S|shaunc> shaun's new goal"
 
-  var goal = "undefined";
+  // var goal = "undefined";
+  //
+  // var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
+  // if (re.test(args)) {
+  //   re = /.*<@(U\w+)\|(\w+)>\s*(.*)?/; // regexp
+  //   var tokens = re.exec(args);
+  //
+  //   uid = tokens[1];
+  //   uname = tokens[2];
+  //   goal = tokens[3];
+  // } else {
+  //   re = /\s*(.*)?/; // regexp
+  //   var tokens = re.exec(args);
+  //
+  //   goal = tokens[1];
+  // }
 
-  var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
-  if (re.test(args)) {
-    re = /.*<@(U\w+)\|(\w+)>\s*(.*)?/; // regexp
-    var tokens = re.exec(args);
-
-    uid = tokens[1];
-    uname = tokens[2];
-    goal = tokens[3];
-  } else {
-    re = /\s*(.*)?/; // regexp
-    var tokens = re.exec(args);
-
-    goal = tokens[1];
+  args = parseArgs(args);
+  if (args.uid) {
+    uid = args.uid;
+  }
+  if (args.uname) {
+    uname = args.uname;
   }
 
-  return ContentService.createTextOutput("uid: " + uid + ", uname: " + uname + ", args: " + args + ", goal: " + goal + ".");
+  var result = "uid: " + uid + ", uname: " + uname;
+  if (args.body) {
+    // setting goal
+
+    // set goal in Google sheet
+
+    result = result + ", goal: " + args.body;
+  } else {
+    // querying goal
+
+    // get goal from Google sheet
+
+  }
+
+  return ContentService.createTextOutput(result);
 }
 
 function scoreHandler(uid,uname,args) {
@@ -83,6 +105,41 @@ function scoreHandler(uid,uname,args) {
   //   /score @user <-- return the score for @user (user only, not in nchannel)
   //   /score @user score <-- set the score for @user (note: cannot set your own score) (shows in channel)
 }
+
+function parseArgs(args) {
+  // parse slash command arguments
+
+  // args is likely a string like: "<@U444CRH8S|shaunc> shaun's new goal"
+
+  //defaults: undefined
+  var uid = null;
+  var uname = null;
+  var body = null;
+
+  var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
+  if (re.test(args)) {
+    re = /.*<@(U\w+)\|(\w+)>\s*(.*)?/; // regexp
+    var tokens = re.exec(args);
+
+    uid = tokens[1];
+    uname = tokens[2];
+
+    if (typeof(tokens[3]) != "undefined") {
+      body = tokens[3];
+    }
+  } else {
+    re = /\s*(.*)?/; // regexp
+    var tokens = re.exec(args);
+
+    if (typeof(tokens[1]) != "undefined") {
+      body = tokens[1];
+    }
+  }
+
+  return ({uid: uid, uname: uname, body: body});
+}
+
+
 
 function mkErrorAttachment(msg) {
   return ({
