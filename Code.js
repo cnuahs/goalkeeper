@@ -54,6 +54,12 @@ function goalHandler(uid,uname,args) {
   //
   // so, args should be a string like: "<@U444CRH8S|shaunc> shaun's new goal"
 
+//  // DEBUG ONLY
+//  uid = "U444CRH8S";
+//  uname = "shaunc"
+//  args = "";
+//  //
+  
   // var goal = "undefined";
   //
   // var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
@@ -71,7 +77,7 @@ function goalHandler(uid,uname,args) {
   //   goal = tokens[1];
   // }
 
-  args = parseArgs(args);
+  args = parseArgs(args); // return uid, uname and body/goal
   if (args.uid) {
     uid = args.uid;
   }
@@ -86,15 +92,14 @@ function goalHandler(uid,uname,args) {
     // setting goal
 
     // set goal in Google sheet
-    setCurrentGoal(uid,uname,args.body);
+    setCurrentGoal(uid,args.body);
 
     result = result + ", goal: " + args.body;
   } else {
     // querying goal
 
     // get goal from Google sheet
-
-    result = result + ", goal: " + getCurrentGoal(uid,uname);
+    result = result + ", goal: " + getCurrentGoal(uid);
   }
 
   return ContentService.createTextOutput(result);
@@ -143,135 +148,353 @@ function parseArgs(args) {
   return ({uid: uid, uname: uname, body: body});
 }
 
-function getCurrentGoal(uid,uname) {
-//  uname = "shaunc";
+//function getUser(uid,uname) {
+//  // get backend settings for the user
+//
+//  var ss = SpreadsheetApp.openById(sheetId());
+//  SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
+//
+//  //  var ss = SpreadsheetApp.getActiveSpreadsheet();
+//
+//  // look for the users sheet...
+//  hs = ss.getSheetByName(uid);
+//  if (hs == null) {
+//    hs = addUser(ss,uid,uname);
+//  }
+//
+//  // get users row on the score card
+//
+//
+//
+//  Logger.log(uname + " --> " + hs.getName() + "(" + hs.getIndex() + ")");
+//
+//
+//}
 
-  var ss = SpreadsheetApp.openById(sheetId());
-  SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
-
-//  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  var s = ss.getSheetByName("Sheet1"); // FIXME
-  var range = s.getDataRange();
-
-  var nRows = range.getHeight();
-  var nCols = range.getWidth();
-
-  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
-
-  // first nonempty row contains column headings...
-  rowloop:
-  for (var row = 1; row <= nRows; row++) { // getHeight()
-    for (var col = 1; col <= nCols; col++) { // getWidth()
-      var value = range.getCell(row,col).getDisplayValue();
-      if (value) {
-        // (row,col) is the first non-empty cell
-        var headings = s.getRange(row,col,1,nCols).getValues()[0];
-
-        // look for our column headings... pat
-        var colIdx = pat.map(function(re) {
-          for (var i = 0; i < headings.length; i++) {
-            if (re.test(headings[i])) {
-              return i + 1; // rows start at 1
-            }
-          }
-        });
-
-        // update range
-        range = s.getRange(row+1,col,nRows-row,nCols-col+1); // note: excludes headings...
-
-//        Logger.log(colIdx);
-        break rowloop;
-      }
-    }
+function addUser(ss,uid,uname) { // OK
+  // add a new user and return backend settings
+  
+//  // DEBUG ONLY
+//  ss = SpreadsheetApp.openById(sheetId());
+//  uid = "Uxxxxxxxx";
+//  uname = "nobody";
+//  //
+  
+  var s = ss.getSheetByName(uid);
+  if (s != null) {
+    return //getUser(uid,uname); // shouldn;t end up here...
   }
 
-  nRows = range.getHeight();
-  nCols = range.getWidth();
+  var template = ss.getSheetByName('Template');
+  ss.insertSheet(uid, {template: template});
 
-  // get list of writers
-  writerloop:
-  for (var row = 1; row <= nRows; row++) { // getHeight()
-    var writer = range.getCell(row,colIdx[0]).getDisplayValue(); // colIdx[0] is the writer column
-
-//    Logger.log(writer);
-
-    var re = new RegExp(".*"+writer+".*","i");
-    if (re.test(uname)) {
-      var goal = range.getCell(row,colIdx[1]).getDisplayValue(); // colIdx[1] is the goal column
-
-      Logger.log(uname + " --> " + goal);
-    }
+  // find candidate entry on the score card
+  s = ss.getSheetByName("Sheet1");
+  
+  var row = getRowByColumn(s,["Slack UID"],[uid]);
+  
+  Logger.log(row);
+  
+  if (row[0] == null) {
+    // no entry found... create a new row
+    var range = s.getDataRange();
+    var nRows = range.getHeight();
+    
+    s.insertRowAfter(nRows); // append row at the bottom
+    
+    setRow(s,nRows+1,["Slack UID","Writer"],[uid,uname]);
   }
-
-  return goal;
+  
 }
 
-function setCurrentGoal(uid,uname,goal) {
-  //  uname = "shaunc";
-
+function getCurrentGoal(uid) {
   var ss = SpreadsheetApp.openById(sheetId());
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
 
 //  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   var s = ss.getSheetByName("Sheet1"); // FIXME
+//  var range = s.getDataRange();
+//
+//  var nRows = range.getHeight();
+//  var nCols = range.getWidth();
+//
+//  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
+//
+//  // first nonempty row contains column headings...
+//  rowloop:
+//  for (var row = 1; row <= nRows; row++) { // getHeight()
+//    for (var col = 1; col <= nCols; col++) { // getWidth()
+//      var value = range.getCell(row,col).getDisplayValue();
+//      if (value) {
+//        // (row,col) is the first non-empty cell
+//        var headings = s.getRange(row,col,1,nCols).getValues()[0];
+//
+//        // look for our column headings... pat
+//        var colIdx = pat.map(function(re) {
+//          for (var i = 0; i < headings.length; i++) {
+//            if (re.test(headings[i])) {
+//              return i + 1; // rows start at 1
+//            }
+//          }
+//        });
+//
+//        // update range
+//        range = s.getRange(row+1,col,nRows-row,nCols-col+1); // note: excludes headings...
+//
+////        Logger.log(colIdx);
+//        break rowloop;
+//      }
+//    }
+//  }
+//
+//  nRows = range.getHeight();
+//  nCols = range.getWidth();
+//
+//  // get list of writers
+//  writerloop:
+//  for (var row = 1; row <= nRows; row++) { // getHeight()
+//    var writer = range.getCell(row,colIdx[0]).getDisplayValue(); // colIdx[0] is the writer column
+//
+////    Logger.log(writer);
+//
+//    var re = new RegExp(".*"+writer+".*","i");
+//    if (re.test(uname)) {
+//      var goal = range.getCell(row,colIdx[1]).getDisplayValue(); // colIdx[1] is the goal column
+//
+//      Logger.log(uname + " --> " + goal);
+//    }
+//  }
+
+  var row = getRowByColumn(s,["Slack UID"],[uid]);
+  
+  if (row[0] != null) {
+    return getRow(s,row[0],["Goal"])[0];
+  }
+}
+
+function getColumnByName(s,name) { // OK
+  // find column(s) by name, returning column number(s)
+
+//  // DEBUG ONLY
+//  var ss = SpreadsheetApp.openById(sheetId());
+//  s = ss.getSheetByName("Sheet1");
+//  name = ["Writer"];
+//  //
+
   var range = s.getDataRange();
 
   var nRows = range.getHeight();
   var nCols = range.getWidth();
 
-  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
+//  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
 
   // first nonempty row contains column headings...
   rowloop:
-  for (var row = 1; row <= nRows; row++) { // getHeight()
-    for (var col = 1; col <= nCols; col++) { // getWidth()
+  for (var row = 1; row <= nRows; row++) {
+    for (var col = 1; col <= nCols; col++) {
       var value = range.getCell(row,col).getDisplayValue();
       if (value) {
-        // (row,col) is the first non-empty cell
-        var headings = s.getRange(row,col,1,nCols).getValues()[0];
+        // first non-empty cell
+        var headings = s.getRange(row,col,1,nCols-col+1).getValues()[0];
 
-        // look for our column headings... pat
-        var colIdx = pat.map(function(re) {
+//        if (typeof(name) != "Array") {
+//          name = [name]; // for easy looping
+//        }
+
+        name = name.map(function(n) {
+          if (typeof(n) == "RegExp") {
+            return n;
+          } else {
+            return new RegExp(n,"i");
+          }
+        });
+
+        // look for our column heading... colName
+        var idx = name.map(function(re) {
           for (var i = 0; i < headings.length; i++) {
             if (re.test(headings[i])) {
-              return i + 1; // rows start at 1
+              return i + col;
             }
           }
         });
 
-        // update range
-        range = s.getRange(row+1,col,nRows-row,nCols-col+1); // note: excludes headings...
-
-  //      Logger.log(colIdx);
         break rowloop;
       }
-    }
+    } // col
+  } // row
+
+//  if (idx.length == 1) {
+//    idx = idx[0];
+//    
+//    if (typeof(idx) == "undefined") {
+//      idx = null; // column not found
+//    }
+//  }
+  
+  return idx
+}
+
+function getRowByColumn(s,name,value) { // OK
+  // find row by contents of column name, returning row number
+
+//  // DEBUG ONLY
+//  var ss = SpreadsheetApp.openById(sheetId());
+//  s = ss.getSheetByName("Sheet1");
+//  name = ["Writer"];
+//  value = ["Shaun"];
+//  //
+  
+  var range = s.getDataRange();
+
+  var nRows = range.getHeight();
+  var nCols = range.getWidth();
+
+  var col = getColumnByName(s,name); // column index
+
+  if (col == null) {
+    return null; // column not found?
   }
 
-  nRows = range.getHeight();
-  nCols = range.getWidth();
+//  if (typeof(value) != "Array") {
+//    value = [value]; // for easy looping
+//  }
 
-  // get list of writers
-  writerloop:
-  for (var row = 1; row <= nRows; row++) { // getHeight()
-    var writer = range.getCell(row,colIdx[0]).getDisplayValue(); // colIdx[0] is the writer column
+  for (var row = 1; row <= nRows; row++) {
+    var val = range.getCell(row,col).getValue();
 
-  //  Logger.log(writer);
-
-    var re = new RegExp(".*"+writer+".*","i");
-    if (re.test(uname)) {
-      range.getCell(row,colIdx[1]).setValue(goal); // colIdx[1] is the goal column
-
-      Logger.log(goal + " --> " + uname);
-
-      // look for writers individual history sheet...
-      hs = ss.getSheetByName(uid);
-      if (hs != null) { // FIXME: throw exception?
-        Logger.log(uname + " --> " + hs.getName() + "(" + hs.getIndex() + ")");
+    var idx = value.map(function(v) {
+      if (v == val) {
+        return row;
       }
-    }
+    });
+  }
+
+//  if (idx.length == 1) {
+//    idx = idx[0];
+//    
+//    if (typeof(idx) == "undefined") {
+//      idx = null;
+//    }   
+//  }
+  
+  return idx;
+}
+
+function setRow(s,row,name,value) { // SET name = value WHERE row; OK
+  // set column name(s) to value(s) on row
+  
+//  // DEBUG ONLY
+//  var ss = SpreadsheetApp.openById(sheetId());
+//  s = ss.getSheetByName("Sheet1");
+//  row = getRowByColumn(s,["Writer"],["Shaun"]);
+//  name = ["Goal"];
+//  value = ["A newish goal for Shaun."];
+//  //
+  
+//  var range = s.getDataRange();
+  var range = s.getRange(1,1,row,s.getLastColumn()); // incase row is empty and therefore not included by getDataRange()
+  
+  var nRows = range.getHeight();
+    
+  var col = getColumnByName(s,name); // column indicies
+  
+  for (var i = 0; i < col.length; i++) {
+    var cell = range.getCell(row,col[i]);
+    cell.setValue(value[i]);
+  }  
+}
+
+function getRow(s,row,name) { // SELECT name WHERE row; OK
+  // get value(s) from column name(s) on row
+  
+//  //  // DEBUG ONLY
+//  var ss = SpreadsheetApp.openById(sheetId());
+//  s = ss.getSheetByName("Sheet1");
+//  row = getRowByColumn(s,["Writer"],["Shaun"]);
+//  name = ["Writer","Goal"];
+//  //
+  
+  var range = s.getDataRange();
+  
+  var value = getColumnByName(s,name).map(function (col) {
+    return range.getCell(row,col).getValue();
+  });
+  
+//  Logger.log(value);
+  
+  return value;
+}
+
+function setCurrentGoal(uid,goal) {
+  var ss = SpreadsheetApp.openById(sheetId());
+  SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
+
+//  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var s = ss.getSheetByName("Sheet1"); // FIXME
+//  var range = s.getDataRange();
+//
+//  var nRows = range.getHeight();
+//  var nCols = range.getWidth();
+//
+//  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
+//
+//  // first nonempty row contains column headings...
+//  rowloop:
+//  for (var row = 1; row <= nRows; row++) { // getHeight()
+//    for (var col = 1; col <= nCols; col++) { // getWidth()
+//      var value = range.getCell(row,col).getDisplayValue();
+//      if (value) {
+//        // (row,col) is the first non-empty cell
+//        var headings = s.getRange(row,col,1,nCols).getValues()[0];
+//
+//        // look for our column headings... pat
+//        var colIdx = pat.map(function(re) {
+//          for (var i = 0; i < headings.length; i++) {
+//            if (re.test(headings[i])) {
+//              return i + 1; // rows start at 1
+//            }
+//          }
+//        });
+//
+//        // update range
+//        range = s.getRange(row+1,col,nRows-row,nCols-col+1); // note: excludes headings...
+//
+//  //      Logger.log(colIdx);
+//        break rowloop;
+//      }
+//    }
+//  }
+//
+//  nRows = range.getHeight();
+//  nCols = range.getWidth();
+//
+//  // get list of writers
+//  writerloop:
+//  for (var row = 1; row <= nRows; row++) { // getHeight()
+//    var writer = range.getCell(row,colIdx[0]).getDisplayValue(); // colIdx[0] is the writer column
+//
+//  //  Logger.log(writer);
+//
+//    var re = new RegExp(".*"+writer+".*","i");
+//    if (re.test(uname)) {
+//      range.getCell(row,colIdx[1]).setValue(goal); // colIdx[1] is the goal column
+//
+//      Logger.log(goal + " --> " + uname);
+//
+//      // look for writers individual history sheet...
+//      hs = ss.getSheetByName(uid);
+//      if (hs != null) { // FIXME: throw exception?
+//        Logger.log(uname + " --> " + hs.getName() + "(" + hs.getIndex() + ")");
+//      }
+//    }
+//  }
+  
+  var row = getRowByColumn(s,["Slack UID"],[uid]);
+  
+  if (row[0] != null) {
+    setRow(s,row[0],["Goal"],[goal]);
   }
 }
 
