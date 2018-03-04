@@ -32,10 +32,8 @@ function doPost(payload) {
   switch (payload.parameter.command) {
     case "/goal":
       return goalHandler(uid,uname,args);
-      break;
     case "/score":
       return scoreHandler(uid,uname,args);
-      break;
   }
 
   // shouldn't be possible to end up here...
@@ -59,25 +57,8 @@ function goalHandler(uid,uname,args) {
 //  uname = "shaunc"
 //  args = "";
 //  //
-  
-  // var goal = "undefined";
-  //
-  // var re = /.*(<@U.*>).*/; // regexp, match <@Uxxxxxxxx|xxxxxxxx>
-  // if (re.test(args)) {
-  //   re = /.*<@(U\w+)\|(\w+)>\s*(.*)?/; // regexp
-  //   var tokens = re.exec(args);
-  //
-  //   uid = tokens[1];
-  //   uname = tokens[2];
-  //   goal = tokens[3];
-  // } else {
-  //   re = /\s*(.*)?/; // regexp
-  //   var tokens = re.exec(args);
-  //
-  //   goal = tokens[1];
-  // }
 
-  args = parseArgs(args); // return uid, uname and body/goal
+  args = parseArgs(args); // uid, uname, body/goal
   if (args.uid) {
     uid = args.uid;
   }
@@ -87,12 +68,14 @@ function goalHandler(uid,uname,args) {
 
   Logger.log("goalHandler(): uid: " + uid + ", uname: " + uname);
 
+  // check for user?
+  
   var result = "uid: " + uid + ", uname: " + uname;
   if (args.body) {
     // setting goal
 
     // set goal in Google sheet
-    setCurrentGoal(uid,args.body);
+    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
 
     result = result + ", goal: " + args.body;
   } else {
@@ -176,43 +159,97 @@ function addUser(ss,uid,uname) { // OK
   
 //  // DEBUG ONLY
 //  ss = SpreadsheetApp.openById(sheetId());
-//  uid = "Uxxxxxxxx";
-//  uname = "nobody";
+////  uid = "Uxxxxxxxx";
+////  uname = "nobody";
+//  uid = "U444CRH8S";
+//  uname = "shaunc";
 //  //
   
-  var s = ss.getSheetByName(uid);
-  if (s != null) {
-    return //getUser(uid,uname); // shouldn;t end up here...
-  }
-
-  var template = ss.getSheetByName('Template');
-  ss.insertSheet(uid, {template: template});
-
-  // find candidate entry on the score card
-  s = ss.getSheetByName("Sheet1");
+  // 1. find candidate entry on the score sheet
+  var s = ss.getSheetByName("Sheet1");
   
-  var row = getRowByColumn(s,["Slack UID"],[uid]);
-  
-  Logger.log(row);
-  
-  if (row[0] == null) {
-    // no entry found... create a new row
-    var range = s.getDataRange();
-    var nRows = range.getHeight();
+  var row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
     
-    s.insertRowAfter(nRows); // append row at the bottom
-    
-    setRow(s,nRows+1,["Slack UID","Writer"],[uid,uname]);
+  if (row != null) { // FIXME: row is actually 'undefined'
+    // user exists...?
+    return row;
   }
   
+  // 2. user is unknown... but use some huristics here to see if we have any close matches
+  Logger.log("User " + uid + " (" + uname + ") unknown.");
+  
+  // loop over known writers and see if any "match" the supplied slack user name
+  var col = getColumnByName(s,["Writer"]);
+  
+  var range = s.getDataRange();
+  var nRows = range.getHeight();
+  
+  writerloop:
+  for (row = 1; row <= nRows; row++) { // getHeight()
+    var writer = range.getCell(row,col).getDisplayValue(); // col is the "Writer" column
+
+    if (writer.length === 0) {
+      // empty cell...
+      continue
+    }
+    
+    var re = new RegExp(".*"+writer+".*","i"); // case insensitive
+    if (re.test(uname)) {
+      // writer might be our new/unknown user...
+      //
+      // 1. check that this writers uid field is empty
+      // 2. if so, appropriate the existing record by assigning the current uid to this writer, 
+      var uid_ = getRow(s,row,["Slack UID"])[0];
+      
+      Logger.log("User " + uid + " (" + uname + ") might be " + writer + " (uid:" + uid_ + ").");
+      
+      
+      if (uid_.length === 0) {
+        Logger.log("Ok. Appropriating " + writer + " to be " + uid + " (" + uname + ").");
+        setRow(s,row,["Slack UID"],[uid]);
+        break writerloop;
+      }
+    }
+  }
+  
+  row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
+  
+  if (row == null) { // FIXME: row is 'undefined'
+    // no entry found... create a new row    
+    s.insertRowAfter(nRows); // append row at the bottom (inherits formatting)
+    
+    row = nRows + 1;
+    setRow(s,row,["Slack UID","Writer"],[uid,uname]);
+  }
+      
+  // 3. find/create the users history sheet
+  var h = ss.getSheetByName(uid);
+  if (h == null) {
+    // create the users history sheet...
+//    var template = ss.getSheetByName('Template');
+//    ss.insertSheet(uid, {template: template});
+    ss.insertSheet(uid);
+    h = ss.getSheetByName(uid);
+    h.appendRow(["Date","Goal","Score"]); // column headings    
+  }
+  
+  // copy any existing goal to the history sheet
+  h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
+  setRow(h,h.getLastRow()+1,["Date","Goal"],getRow(s,row,["Date","Goal"]));
+
+  return row;
 }
 
-function getCurrentGoal(uid) {
+function getCurrentGoal(uid) {  
   var ss = SpreadsheetApp.openById(sheetId());
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
 
 //  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
+//  // DEBUG ONLY
+//  uid = "U444CRH8S";
+//  //
+  
   var s = ss.getSheetByName("Sheet1"); // FIXME
 //  var range = s.getDataRange();
 //
@@ -350,7 +387,7 @@ function getRowByColumn(s,name,value) { // OK
   var nRows = range.getHeight();
   var nCols = range.getWidth();
 
-  var col = getColumnByName(s,name); // column index
+  var col = getColumnByName(s,name)[0]; // column index
 
   if (col == null) {
     return null; // column not found?
@@ -360,16 +397,18 @@ function getRowByColumn(s,name,value) { // OK
 //    value = [value]; // for easy looping
 //  }
 
+  var idx = new Array();
   for (var row = 1; row <= nRows; row++) {
     var val = range.getCell(row,col).getValue();
 
-    var idx = value.map(function(v) {
+    value.forEach(function(v) {
       if (v == val) {
-        return row;
+        idx.push(row);
       }
     });
+    
   }
-
+  
 //  if (idx.length == 1) {
 //    idx = idx[0];
 //    
@@ -393,7 +432,7 @@ function setRow(s,row,name,value) { // SET name = value WHERE row; OK
 //  //
   
 //  var range = s.getDataRange();
-  var range = s.getRange(1,1,row,s.getLastColumn()); // incase row is empty and therefore not included by getDataRange()
+  var range = s.getRange(1,1,row,s.getLastColumn()); // in case row is empty and therefore not included by getDataRange()
   
   var nRows = range.getHeight();
     
@@ -426,76 +465,24 @@ function getRow(s,row,name) { // SELECT name WHERE row; OK
   return value;
 }
 
-function setCurrentGoal(uid,goal) {
+function setCurrentGoal(uid,uname,goal) {
   var ss = SpreadsheetApp.openById(sheetId());
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
 
-//  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
   var s = ss.getSheetByName("Sheet1"); // FIXME
-//  var range = s.getDataRange();
-//
-//  var nRows = range.getHeight();
-//  var nCols = range.getWidth();
-//
-//  var pat = [/writer.*/i,/goal.*/i]; // regexp for column headings
-//
-//  // first nonempty row contains column headings...
-//  rowloop:
-//  for (var row = 1; row <= nRows; row++) { // getHeight()
-//    for (var col = 1; col <= nCols; col++) { // getWidth()
-//      var value = range.getCell(row,col).getDisplayValue();
-//      if (value) {
-//        // (row,col) is the first non-empty cell
-//        var headings = s.getRange(row,col,1,nCols).getValues()[0];
-//
-//        // look for our column headings... pat
-//        var colIdx = pat.map(function(re) {
-//          for (var i = 0; i < headings.length; i++) {
-//            if (re.test(headings[i])) {
-//              return i + 1; // rows start at 1
-//            }
-//          }
-//        });
-//
-//        // update range
-//        range = s.getRange(row+1,col,nRows-row,nCols-col+1); // note: excludes headings...
-//
-//  //      Logger.log(colIdx);
-//        break rowloop;
-//      }
-//    }
-//  }
-//
-//  nRows = range.getHeight();
-//  nCols = range.getWidth();
-//
-//  // get list of writers
-//  writerloop:
-//  for (var row = 1; row <= nRows; row++) { // getHeight()
-//    var writer = range.getCell(row,colIdx[0]).getDisplayValue(); // colIdx[0] is the writer column
-//
-//  //  Logger.log(writer);
-//
-//    var re = new RegExp(".*"+writer+".*","i");
-//    if (re.test(uname)) {
-//      range.getCell(row,colIdx[1]).setValue(goal); // colIdx[1] is the goal column
-//
-//      Logger.log(goal + " --> " + uname);
-//
-//      // look for writers individual history sheet...
-//      hs = ss.getSheetByName(uid);
-//      if (hs != null) { // FIXME: throw exception?
-//        Logger.log(uname + " --> " + hs.getName() + "(" + hs.getIndex() + ")");
-//      }
-//    }
-//  }
   
-  var row = getRowByColumn(s,["Slack UID"],[uid]);
+  var row = getRowByColumn(s,["Slack UID"],[uid])[0];
   
-  if (row[0] != null) {
-    setRow(s,row[0],["Goal"],[goal]);
+  if (row == null) {
+    var row = addUser(ss,uid,uname);
   }
+  
+  setRow(s,row,["Goal"],[goal]);
+  
+  // update the history sheet
+  var h = ss.getSheetByName(uid);
+  h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
+  setRow(h,h.getLastRow()+1,["Date","Goal"],[new Date(),goal]);
 }
 
 function mkErrorAttachment(msg) {
