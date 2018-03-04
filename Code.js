@@ -15,23 +15,119 @@
 //     channel_id: Cxxxxxxxx
 //     text: ""
 //   }
+//
+// POST payloads from clack interactive messages look like this:
+//
+//   payload = {
+//     "type":"interactive_message",
+//     "actions": [{"name":"connect","type":"button","value":"connect"}],
+//     "callback_id":"connect_button",
+//     "team":{"id":"T446ZHZCM","domain":"marmolab"},
+//     "channel":{"id":"C9H2SGDAB","name":"zapier"},
+//     "user":{"id":"U444CRH8S","name":"shaunc"},
+//     "action_ts":"1520162909.626735",
+//     "message_ts":"1520162906.000006",
+//     "attachment_id":"1",
+//     "token":"~",
+//     "is_app_unfurl":false,
+//     "response_url":"https:\/\/hooks.slack.com\/actions\/T446ZHZCM\/324381989189\/MC4cTfQapRT66BHKnUT3cL43",
+//     "trigger_id":"325313099191.140237611429.394aac905741a80e785acc00af736e08"
+//    }
+
+// POST payloads from slack slash commands look like this:
+//
+//   payload = {
+//     text: connect
+//     token: ~
+//     trigger_id: 324237861204.140237611429.2caca5a2609846b16eda4a46e415fefc
+//     user_id: U444CRH8S
+//     response_url: https://hooks.slack.com/commands/T446ZHZCM/325313596263/rvl0HvO2yXp7E4bqVgfPuIor
+//     team_domain: marmolab
+//     channel_name: zapier
+//     user_name: shaunc
+//     channel_id: C9H2SGDAB
+//     team_id: T446ZHZCM
+//     command: /goal
+//   }
 
 // 2018-03-04 - Shaun L. Cloherty <s.cloherty@ieee.org>
 
-function doPost(payload) {
+function doPost(e) {
 
-  if (payload.parameter.token != slackToken()) {
-    var err = { text: "",
-                attachments: [ mkErrorAttachment("Verification failed.") ] };
-
-    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
+//  e.parameter.payload = interactive message
+//  e.parameter = slash command
+  
+  if (e.parameter.hasOwnProperty("payload")) {
+    // this is an interactive message...
+    return msgHandler(JSON.parse(e.parameter.payload));
+  } else {
+    // this is a slash command...
+    return cmdHandler(e.parameter);
   }
+}
 
-  var uid = payload.parameter.user_id;
-  var uname = payload.parameter.user_name;
-  var args = payload.parameter.text;
+function msgHandler(payload) {
+  // handler for slack interactive messages
+  if (payload.token != slackToken()) {
+//    var err = { text: "",
+//                attachments: [ mkErrorAttachment("Verification failed.") ] };
+//
+//    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
+    return mkErrorMsg("Verification failed.");
+  }
+    
+  var msg = {
+    response_type: "ephemeral",
+    text: "Ok, got it!"
+  };
+      
+  var options = {
+    method: "post",
+    contentType : "application/json",
+    payload: JSON.stringify(msg)
+  };
+  
+  // I don;t think this is the intended us of the response_url... we should be
+  // responding with an empty HTTP 200, but Apps Script is synchronous so I'm fudging it
+  var response = UrlFetchApp.fetch(payload.response_url,options);
+    
+  addUser(payload.user.id,payload.user.name);
+  
+//  msg = {
+//    response_type: "ephemeral",
+//    text: "",
+//    attachment: {
+//      fallback: "Connected!",
+//      color: "good",
+//      text: "Connected!",
+//      mrkdn_in: [ "text" ]
+//    }
+//  };
+//  
+//  options.payload = JSON.stringify(msg);
+//  
+//  response = UrlFetchApp.fetch(payload.response_url,options);
+//
+//  eph = mkGeneralMsg("Ok, got it!");
+//  
+//  return eph;
+}
 
-  switch (payload.parameter.command) {
+function cmdHandler(payload) {  
+  // handler for slack slash commands
+  if (payload.token != slackToken()) {
+//    var err = { text: "",
+//                attachments: [ mkErrorAttachment("Verification failed.") ] };
+//
+//    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
+    return mkErrorMsg("Verification failed.");
+  }
+  
+  var uid = payload.user_id;
+  var uname = payload.user_name;
+  var args = payload.text;
+
+  switch (payload.command) {
     case "/goal":
       return goalHandler(uid,uname,args);
     case "/score":
@@ -39,7 +135,7 @@ function doPost(payload) {
   }
 
   // shouldn't be possible to end up here...
-  return ContentService.createTextOutput("Got POST on "+ new Date() + " for " + payload.parameter.command + ".");
+  return ContentService.createTextOutput("Got POST on "+ new Date() + " for " + payload.command + ".");
 }
 
 function goalHandler(uid,uname,args) {
@@ -85,18 +181,15 @@ function goalHandler(uid,uname,args) {
     return mkUserErrorMsg();
   }
 
-//  if (args.uid) {
-//    uid = args.uid;
-//  }
-//  if (args.uname) {
-//    uname = args.uname;
-//  }
-
-  // if we end up here, args.body is either empty, or contains a new goal...
+  // if we end up here, args.body is either empty or contains a new goal...
   
   if (args.body) {
     // setting goal
 
+    if (args.uid && args.uid != uid) {
+      return mkErrorMsg("You can't set goals for <@" + args.uid + ">.");
+    }
+                        
     // set goal in Google sheet
 //    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
     return setCurrentGoal(uid,args.body);
@@ -221,7 +314,7 @@ function parseArgs(args) {
 }
 
 function getUser(uid) {
-  // check that uid is known it us
+  // check that uid is known to us
   var ss = SpreadsheetApp.openById(sheetId());
   var s = ss.getSheetByName("Sheet1");
   
@@ -250,8 +343,9 @@ function testGetUser() {
   Logger.log("- %s.",result);
 }
 
-function addUser(ss,uid,uname) { // OK
+function addUser(uid,uname) { // OK
   // add a new user and return backend settings
+  var ss = SpreadsheetApp.openById(sheetId());
   
   // 1. find candidate entry on the score sheet
   var s = ss.getSheetByName("Sheet1");
@@ -353,7 +447,7 @@ function setCurrentGoal(uid,goal) {
     return mkUserErrorMsg(); // shouldn't ever end up here!
   }
   
-  setRow(s,row,["Goal"],[goal]);
+  setRow(s,row,["Date","Goal"],[new Date(),goal]);
   
   // update the history sheet
   var h = ss.getSheetByName(uid);
@@ -589,10 +683,19 @@ function testGetRow() {
 // response formatting
 //
 
-function mkHelpMsg(msg) {
+function mkHelpMsg() {
+  // build the help action response
+  
+  var attachment = {
+    color: "good",
+    text: "Help text does here...",
+    mrkdwn_in: ["text"]
+  };
+  
   var response = {
+    response_type: "ephemeral",
     text: "",
-    attachments: [ mkHelpAttachment(msg) ]
+    attachments: [ attachment ]
   }; 
   
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
@@ -608,22 +711,23 @@ function mkHelpAttachment(msg) {
 
 function mkConnectMsg(uid,uname) {
   // build the connect action response
-  var url = ScriptApp.getService().getUrl();
-  var args = "?uid=" + encodeURIComponent(uid) + "&uname=" + encodeURIComponent(uname); // pass uid and uname through to doGet()
-
+  
   var attachment = {
-    fallback: "Connect with the GoalKeeper at " + url + args,
+    fallback: "Click to connect.",
     color: "good",
     text: "Click the button below to connect with the GoalKeeper...",
+    callback_id: "connect_button",
     actions: [ {
         type: "button",
         text: "Connect",
-        url: url + args
+        name: "connect",
+        value: "connect",
     } ],
     mrkdn_in: [ "text" ]
   };
   
   var response = {
+    response_type: "ephemeral",
     text: "You have goals? Awesome!",
     attachments: [ attachment ]
   }
@@ -637,6 +741,7 @@ function mkUserErrorMsg() {
 
 function mkErrorMsg(msg) {
   var response = {
+    response_type: "ephemeral",
     text: "",
     attachments: [ mkErrorAttachment(msg) ]
   }; 
@@ -664,10 +769,4 @@ function mkGeneralMsg(msg,inChannel) {
   }
     
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);    
-}
-
-function doGet(payload) {
-  // 
-  var params = JSON.stringify(payload);
-  return HtmlService.createHtmlOutput(params);
 }
