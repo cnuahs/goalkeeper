@@ -1,78 +1,40 @@
-// GoalKeeper slash command handler for slack...
-
-// POST payloads from slack slash commands contain the following parameter object:
-//
-//   payload.parameter = {
-//     user_name: "~"
-//     trigger_id: "~"
-//     user_id: "Uxxxxxxxx"
-//     team_id: "Txxxxxxxx"
-//     response_url: "~"
-//     channel_name: "~"
-//     token: "~"
-//     team_domain: "~"
-//     command: "~"
-//     channel_id: Cxxxxxxxx
-//     text: ""
-//   }
-//
-// POST payloads from clack interactive messages look like this:
-//
-//   payload = {
-//     "type":"interactive_message",
-//     "actions": [{"name":"connect","type":"button","value":"connect"}],
-//     "callback_id":"connect_button",
-//     "team":{"id":"T446ZHZCM","domain":"marmolab"},
-//     "channel":{"id":"C9H2SGDAB","name":"zapier"},
-//     "user":{"id":"U444CRH8S","name":"shaunc"},
-//     "action_ts":"1520162909.626735",
-//     "message_ts":"1520162906.000006",
-//     "attachment_id":"1",
-//     "token":"~",
-//     "is_app_unfurl":false,
-//     "response_url":"https:\/\/hooks.slack.com\/actions\/T446ZHZCM\/324381989189\/MC4cTfQapRT66BHKnUT3cL43",
-//     "trigger_id":"325313099191.140237611429.394aac905741a80e785acc00af736e08"
-//    }
-
-// POST payloads from slack slash commands look like this:
-//
-//   payload = {
-//     text: connect
-//     token: ~
-//     trigger_id: 324237861204.140237611429.2caca5a2609846b16eda4a46e415fefc
-//     user_id: U444CRH8S
-//     response_url: https://hooks.slack.com/commands/T446ZHZCM/325313596263/rvl0HvO2yXp7E4bqVgfPuIor
-//     team_domain: marmolab
-//     channel_name: zapier
-//     user_name: shaunc
-//     channel_id: C9H2SGDAB
-//     team_id: T446ZHZCM
-//     command: /goal
-//   }
+// GoalKeeper app for slack...
 
 // 2018-03-04 - Shaun L. Cloherty <s.cloherty@ieee.org>
 
 function doPost(e) {
-
-//  e.parameter.payload = interactive message
-//  e.parameter = slash command
-
+  // HTTP POST endpoint
   if (e.parameter.hasOwnProperty("payload")) {
-    // this is an interactive message...
+    // this is an interactive message... payload is json
     return msgHandler(JSON.parse(e.parameter.payload));
   } else {
-    // this is a slash command...
+    // this is a slash command
     return cmdHandler(e.parameter);
   }
 }
 
 function msgHandler(payload) {
   // handler for slack interactive messages
+  //
+  // POST payloads from slack interactive messages contain the following:
+  //
+  //   payload = {
+  //     type: "interactive_message",
+  //     actions: [{name: "~", type: "~", value: "~"}],
+  //     callback_id: "~",
+  //     team: {id: "Txxxxxxxx",domain: "~"},
+  //     channel: {id: "Cxxxxxxxx", name: "~"},
+  //     user: {id: "Uxxxxxxxx", name: "~"},
+  //     action_ts: "~",
+  //     message_ts: "~",
+  //     attachment_id: "~",
+  //     token: "~",
+  //     is_app_unfurl: true/false,
+  //     response_url: "~",
+  //     trigger_id: "~"
+  //    }
+  
   if (payload.token != slackToken()) {
-//    var err = { text: "",
-//                attachments: [ mkErrorAttachment("Verification failed.") ] };
-//
-//    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
     return mkErrorMsg("Verification failed.");
   }
 
@@ -87,8 +49,8 @@ function msgHandler(payload) {
     payload: JSON.stringify(msg)
   };
 
-  // I don;t think this is the intended us of the response_url... we should be
-  // responding with an empty HTTP 200, but Apps Script is synchronous so I'm fudging it
+  // I don't think this is a sanctioned use of the response_url... we should be
+  // responding with an empty HTTP 200, but Google Apps Script is synchronous so I'm fudging it
   var response = UrlFetchApp.fetch(payload.response_url,options);
 
   addUser(payload.user.id,payload.user.name);
@@ -108,18 +70,29 @@ function msgHandler(payload) {
 //
 //  response = UrlFetchApp.fetch(payload.response_url,options);
 //
-//  eph = mkGeneralMsg("Ok, got it!");
-//
-//  return eph;
+//  return mkGeneralMsg("Ok, got it!");
 }
 
 function cmdHandler(payload) {
   // handler for slack slash commands
+  //
+  // POST payloads from slack slash commands contain the following:
+  //
+  //   payload = {
+  //     user_name: "~"
+  //     trigger_id: "~"
+  //     user_id: "Uxxxxxxxx"
+  //     team_id: "Txxxxxxxx"
+  //     response_url: "~"
+  //     channel_name: "~"
+  //     token: "~"
+  //     team_domain: "~"
+  //     command: "~"
+  //     channel_id: "Cxxxxxxxx"
+  //     text: ""
+  //   }
+  
   if (payload.token != slackToken()) {
-//    var err = { text: "",
-//                attachments: [ mkErrorAttachment("Verification failed.") ] };
-//
-//    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
     return mkErrorMsg("Verification failed.");
   }
 
@@ -146,12 +119,12 @@ function goalHandler(uid,uname,args) {
   //   /goal <-- return current goal (user only, not displayed in channel)
   //   /goal @user <-- return current goal for @user (user only, not in channel)
   //   /goal new goal <-- set current goal to 'new goal' (shows in channel)
-  //   /goal @user new goal <-- set current goal for @user (shows in channel)?
+  //   /goal @user new goal <-- set current goal for @user (shows in channel)? [NOT SUPPORTED]
   //
   //   /goal help
   //   /goal connect
   //
-  // so, args should be a string like: "<@U444CRH8S|shaunc> shaun's new goal"
+  // so, args should be a string like: "<@Uxxxxxxxx|name> Some new goal."
 
   args = parseArgs(args); // uid, uname, body (either an action or a new goal)
 
@@ -169,10 +142,10 @@ function goalHandler(uid,uname,args) {
     switch(idx) {
       case 0: // help
         // return help msg
-        return mkHelpMsg("/goal help message goes here");
+        return mkHelpMsg();
       case 1: // connect
-        // return connect prompt
-        return mkConnectMsg(uid,uname);
+        // return connect msg/prompt
+        return mkConnectMsg();
     }
   }
 
@@ -191,7 +164,6 @@ function goalHandler(uid,uname,args) {
     }
 
     // set goal in Google sheet
-//    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
     return setCurrentGoal(uid,args.body);
   } else {
     // querying goal
@@ -258,8 +230,8 @@ function testGoalHandler() {
 
   Logger.log("- %s.",result.getContent());
 
-  // test unknonw user...
-  uid = "Uyyyyyyyy";
+  // test unknown user...
+  uid = "UUnknownUser";
   uname = "noname";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
 
@@ -283,9 +255,9 @@ function scoreHandler(uid,uname,args) {
 function parseArgs(args) {
   // parse slash command arguments
 
-  // args is likely a string like: "<@U444CRH8S|shaunc> shaun's new goal"
+  // args is likely a string like: "<@Uxxxxxxxx|name> Some new goal."
 
-  //defaults: undefined
+  //defaults
   var uid = null;
   var uname = null;
   var body = null;
@@ -443,7 +415,6 @@ function setCurrentGoal(uid,goal) {
   var row = getRowByColumn(s,["Slack UID"],[uid])[0];
 
   if (row == null) {
-//    var row = addUser(ss,uid,uname);
     return mkUserErrorMsg(); // shouldn't ever end up here!
   }
 
@@ -454,7 +425,6 @@ function setCurrentGoal(uid,goal) {
   h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
   setRow(h,h.getLastRow()+1,["Date","Goal"],[new Date(),goal]);
 
-//  return ContentService.createTextOutput("Ok, got it!"); // FIXME: echo the goal to the channel instead?
   return mkGeneralMsg("Ok, got it!",true); // true = display in channel
 }
 
@@ -493,7 +463,7 @@ function getCurrentGoal(uid) {
   var row = getRowByColumn(s,["Slack UID"],[uid])[0];
 
   if (row == null) {
-    return mkGeneralMsg("I don't know <@" + uid + ">."); // FIXME: uid isn't know to us...
+    return mkGeneralMsg("I don't know <@" + uid + ">."); // uid isn't known to us...
   }
 
   var goal = getRow(s,row,["Goal"])[0];
@@ -506,7 +476,7 @@ function testGetCurrentGoal() {
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
 
-  var row = getRowByColumn(s,["Writer"],["Shaun"]);
+  var row = getRowByColumn(s,["Writer"],["Uxxxxxxxx"]);
   var uid = getRow(s,row,["Slack UID"]);
 
   // known user
@@ -612,7 +582,7 @@ function testGetRowByColumn() {
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
   name = ["Writer"];
-  value = ["Shaun"];
+  value = ["nobody"];
 
   Logger.log("Testing getRowByColumn(%s,%s,%s)",s.getName(),name,value);
 
@@ -642,9 +612,9 @@ function testSetRow() {
   // test setRow()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
-  row = getRowByColumn(s,["Writer"],["Shaun"]);
+  row = getRowByColumn(s,["Writer"],["nobody"]);
   name = ["Goal"];
-  value = ["A new goal for Shaun."];
+  value = ["A new goal."];
 
   Logger.log("Testing setRow(%s,%s,%s,%s)",s.getName(),row,name,value);
 
@@ -669,7 +639,7 @@ function testGetRow() {
   // test getRow()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
-  row = getRowByColumn(s,["Writer"],["Shaun"]);
+  row = getRowByColumn(s,["Writer"],["nobody"]);
   name = ["Writer","Goal"];
 
   Logger.log("Testing getRow(%s,%s,%s)",s.getName(),row,name);
@@ -723,7 +693,7 @@ function mkHelpAttachment(msg) {
   })
 }
 
-function mkConnectMsg(uid,uname) {
+function mkConnectMsg() {
   // build the connect action response
 
   var attachment = {
