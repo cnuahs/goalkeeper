@@ -57,34 +57,59 @@ function goalHandler(uid,uname,args) {
   //
   // so, args should be a string like: "<@U444CRH8S|shaunc> shaun's new goal"
 
-  args = parseArgs(args); // uid, uname, body/goal
-  if (args.uid) {
-    uid = args.uid;
-  }
-  if (args.uname) {
-    uname = args.uname;
-  }
+  args = parseArgs(args); // uid, uname, body (either an action or a new goal)
 
-  Logger.log("goalHandler(): uid: " + uid + ", uname: " + uname);
-
-  // check for user?
+  if (args.body) {
+    // check for supported actions...
+    var action = [/help/,/connect/]; // regexp for supported actions
   
-  var result = "uid: " + uid + ", uname: " + uname;
+    var idx = action.reduce(function(prev,re,i) {
+      if (re.test(args.body)) {
+        return i;
+      }
+      return prev;
+    },null);
+    
+    switch(idx) {
+      case 0: // help
+        // return help msg
+        return mkHelpMsg("/goal help message goes here");
+      case 1: // connect
+        // return connect prompt
+        return mkConnectMsg(uid,uname);
+    }
+  }
+  
+  // check user is known to us...
+  if (!getUser(uid)) {
+    return mkUserErrorMsg();
+  }
+
+//  if (args.uid) {
+//    uid = args.uid;
+//  }
+//  if (args.uname) {
+//    uname = args.uname;
+//  }
+
+  // if we end up here, args.body is either empty, or contains a new goal...
+  
   if (args.body) {
     // setting goal
 
     // set goal in Google sheet
-    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
-
-    result = result + ", goal: " + args.body;
+//    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
+    return setCurrentGoal(uid,args.body);
   } else {
     // querying goal
 
+    if (args.uid) {
+      uid = args.uid;
+    }
+    
     // get goal from Google sheet
-    result = result + ", goal: " + getCurrentGoal(uid);
+    return getCurrentGoal(uid);
   }
-
-  return ContentService.createTextOutput(result);
 }
 
 function testGoalHandler() {
@@ -92,6 +117,22 @@ function testGoalHandler() {
   var uid = "Uxxxxxxxx";
   var uname = "nobody";  
 
+  // usage: /goal help
+  args = "help";  
+  Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
+  
+  result = goalHandler(uid,uname,args); 
+  
+  Logger.log("- %s.",result.getContent());
+  
+  // usage: /goal connect
+  args = "connect";  
+  Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
+  
+  result = goalHandler(uid,uname,args); 
+  
+  Logger.log("- %s.",result.getContent());
+  
   // usage: /goal
   var args = "";  
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
@@ -124,11 +165,14 @@ function testGoalHandler() {
   
   Logger.log("- %s.",result.getContent());
   
-  // now the supported actions:
+  // test unknonw user...
+  uid = "Uyyyyyyyy";
+  uname = "noname";
+  Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
   
-  // usage: /goal help
+  result = goalHandler(uid,uname,args); 
   
-  // usage: /goal connect
+  Logger.log("- %s.",result.getContent()); 
 }
 
 function scoreHandler(uid,uname,args) {
@@ -174,6 +218,36 @@ function parseArgs(args) {
   }
 
   return ({uid: uid, uname: uname, body: body});
+}
+
+function getUser(uid) {
+  // check that uid is known it us
+  var ss = SpreadsheetApp.openById(sheetId());
+  var s = ss.getSheetByName("Sheet1");
+  
+  var row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
+
+  return (typeof(row) != "undefined"); // return true for know users
+}
+
+function testGetUser() {
+  // test getUser()
+  
+  // known user
+  uid = "Uxxxxxxxx";
+  Logger.log("Testing getUser(%s)",uid);
+  
+  var result = getUser(uid);
+  
+  Logger.log("- %s.",result);
+
+  // unknown user  
+  uid = "UUnknownUser";
+  Logger.log("Testing getUser(%s)",uid);
+  
+  var result = getUser(uid);
+  
+  Logger.log("- %s.",result);
 }
 
 function addUser(ss,uid,uname) { // OK
@@ -266,7 +340,7 @@ function testAddUser() {
   Logger.log("- %s.",result);
 }
 
-function setCurrentGoal(uid,uname,goal) {
+function setCurrentGoal(uid,goal) {
   var ss = SpreadsheetApp.openById(sheetId());
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
 
@@ -275,7 +349,8 @@ function setCurrentGoal(uid,uname,goal) {
   var row = getRowByColumn(s,["Slack UID"],[uid])[0];
   
   if (row == null) {
-    var row = addUser(ss,uid,uname);
+//    var row = addUser(ss,uid,uname);
+    return mkUserErrorMsg(); // shouldn't ever end up here!
   }
   
   setRow(s,row,["Goal"],[goal]);
@@ -284,25 +359,35 @@ function setCurrentGoal(uid,uname,goal) {
   var h = ss.getSheetByName(uid);
   h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
   setRow(h,h.getLastRow()+1,["Date","Goal"],[new Date(),goal]);
+  
+//  return ContentService.createTextOutput("Ok, got it!"); // FIXME: echo the goal to the channel instead?
+  return mkGeneralMsg("Ok, got it!",true); // true = display in channel
 }
 
 function testSetCurrentGoal() {
   // test setCurrentGoal()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
-  
-  var uname = "nobody";
-  
-  var row = getRowByColumn(s,["Writer"],[uname]);
+    
+  var row = getRowByColumn(s,["Writer"],["nobody"]);
   var uid = getRow(s,row,["Slack UID"]);
   
   var goal = "lorem ipsum";
+
+  // known user
+  Logger.log("Testing setCurrentGoal(%s,%s)",uid,goal);
   
-  Logger.log("Testing setCurrentGoal(%s,%s,%s)",uid,uname,goal);
+  var result = setCurrentGoal(uid,goal);
   
-  var result = setCurrentGoal(uid,uname,goal);
+  Logger.log("- %s",result.getContent());
   
-  Logger.log("- %s",result);
+  // unknown user
+  uid = "UUnknownUser";
+  Logger.log("Testing setCurrentGoal(%s,%s)",uid,goal);
+  
+  var result = setCurrentGoal(uid,goal);
+  
+  Logger.log("- %s",result.getContent());
 }
 
 function getCurrentGoal(uid) {  
@@ -311,11 +396,15 @@ function getCurrentGoal(uid) {
   
   var s = ss.getSheetByName("Sheet1"); // FIXME
 
-  var row = getRowByColumn(s,["Slack UID"],[uid]);
-  
-  if (row[0] != null) {
-    return getRow(s,row[0],["Goal"])[0];
+  var row = getRowByColumn(s,["Slack UID"],[uid])[0];
+      
+  if (row == null) {
+    return mkGeneralMsg("I don't know <@" + uid + ">."); // FIXME: uid isn't know to us...
   }
+  
+  var goal = getRow(s,row,["Goal"])[0];
+  
+  return mkGeneralMsg(goal);
 }
 
 function testGetCurrentGoal() {
@@ -326,11 +415,20 @@ function testGetCurrentGoal() {
   var row = getRowByColumn(s,["Writer"],["Shaun"]);
   var uid = getRow(s,row,["Slack UID"]);
   
+  // known user
   Logger.log("Testing getCurrentGoal(%s)",uid);
   
   var result = getCurrentGoal(uid);
   
-  Logger.log("- %s",result);
+  Logger.log("- %s",result.getContent());
+  
+  // unknown user  
+  uid = "UUnknownUser";
+  Logger.log("Testing getCurrentGoal(%s)",uid);
+  
+  var result = getCurrentGoal(uid);
+  
+  Logger.log("- %s",result.getContent());
 }
 
 function getColumnByName(s,name) { // OK
@@ -487,10 +585,89 @@ function testGetRow() {
   Logger.log("- %s",result);
 }
 
+//
+// response formatting
+//
+
+function mkHelpMsg(msg) {
+  var response = {
+    text: "",
+    attachments: [ mkHelpAttachment(msg) ]
+  }; 
+  
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function mkHelpAttachment(msg) {
+  return ({
+    color: "good",
+    text: msg,
+    mrkdwn_in: ["text"]
+  })
+}
+
+function mkConnectMsg(uid,uname) {
+  // build the connect action response
+  var url = ScriptApp.getService().getUrl();
+  var args = "?uid=" + encodeURIComponent(uid) + "&uname=" + encodeURIComponent(uname); // pass uid and uname through to doGet()
+
+  var attachment = {
+    fallback: "Connect with the GoalKeeper at " + url + args,
+    color: "good",
+    text: "Click the button below to connect with the GoalKeeper...",
+    actions: [ {
+        type: "button",
+        text: "Connect",
+        url: url + args
+    } ],
+    mrkdn_in: [ "text" ]
+  };
+  
+  var response = {
+    text: "You have goals? Awesome!",
+    attachments: [ attachment ]
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function mkUserErrorMsg() {
+  return mkErrorMsg("I don't know you... try `/goal connect` so we can get aquainted.");
+}
+
+function mkErrorMsg(msg) {
+  var response = {
+    text: "",
+    attachments: [ mkErrorAttachment(msg) ]
+  }; 
+  
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+}
+
 function mkErrorAttachment(msg) {
   return ({
     color: "danger",
     text: "*Error*:\n" + msg,
     mrkdwn_in: ["text"]
   })
+}
+
+function mkGeneralMsg(msg,inChannel) {
+  var response_type = "ephemeral"
+  if (inChannel) {
+    response_type = "in_channel";
+  }
+  
+  var response = {
+    response_type: response_type,
+    text: msg
+  }
+    
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);    
+}
+
+function doGet(payload) {
+  // 
+  var params = JSON.stringify(payload);
+  return HtmlService.createHtmlOutput(params);
 }
