@@ -56,7 +56,7 @@ function doPost(e) {
 
 //  e.parameter.payload = interactive message
 //  e.parameter = slash command
-  
+
   if (e.parameter.hasOwnProperty("payload")) {
     // this is an interactive message...
     return msgHandler(JSON.parse(e.parameter.payload));
@@ -75,24 +75,24 @@ function msgHandler(payload) {
 //    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
     return mkErrorMsg("Verification failed.");
   }
-    
+
   var msg = {
     response_type: "ephemeral",
     text: "Ok, got it!"
   };
-      
+
   var options = {
     method: "post",
     contentType : "application/json",
     payload: JSON.stringify(msg)
   };
-  
+
   // I don;t think this is the intended us of the response_url... we should be
   // responding with an empty HTTP 200, but Apps Script is synchronous so I'm fudging it
   var response = UrlFetchApp.fetch(payload.response_url,options);
-    
+
   addUser(payload.user.id,payload.user.name);
-  
+
 //  msg = {
 //    response_type: "ephemeral",
 //    text: "",
@@ -103,17 +103,17 @@ function msgHandler(payload) {
 //      mrkdn_in: [ "text" ]
 //    }
 //  };
-//  
+//
 //  options.payload = JSON.stringify(msg);
-//  
+//
 //  response = UrlFetchApp.fetch(payload.response_url,options);
 //
 //  eph = mkGeneralMsg("Ok, got it!");
-//  
+//
 //  return eph;
 }
 
-function cmdHandler(payload) {  
+function cmdHandler(payload) {
   // handler for slack slash commands
   if (payload.token != slackToken()) {
 //    var err = { text: "",
@@ -122,7 +122,7 @@ function cmdHandler(payload) {
 //    return ContentService.createTextOutput(JSON.stringify(err)).setMimeType(ContentService.MimeType.JSON);
     return mkErrorMsg("Verification failed.");
   }
-  
+
   var uid = payload.user_id;
   var uname = payload.user_name;
   var args = payload.text;
@@ -158,14 +158,14 @@ function goalHandler(uid,uname,args) {
   if (args.body) {
     // check for supported actions...
     var action = [/help/,/connect/]; // regexp for supported actions
-  
+
     var idx = action.reduce(function(prev,re,i) {
       if (re.test(args.body)) {
         return i;
       }
       return prev;
     },null);
-    
+
     switch(idx) {
       case 0: // help
         // return help msg
@@ -175,21 +175,21 @@ function goalHandler(uid,uname,args) {
         return mkConnectMsg(uid,uname);
     }
   }
-  
+
   // check user is known to us...
   if (!getUser(uid)) {
     return mkUserErrorMsg();
   }
 
   // if we end up here, args.body is either empty or contains a new goal...
-  
+
   if (args.body) {
     // setting goal
 
     if (args.uid && args.uid != uid) {
       return mkErrorMsg("You can't set goals for <@" + args.uid + ">.");
     }
-                        
+
     // set goal in Google sheet
 //    setCurrentGoal(uid,uname,args.body); // adds the user if they don't exist
     return setCurrentGoal(uid,args.body);
@@ -199,7 +199,7 @@ function goalHandler(uid,uname,args) {
     if (args.uid) {
       uid = args.uid;
     }
-    
+
     // get goal from Google sheet
     return getCurrentGoal(uid);
   }
@@ -208,64 +208,64 @@ function goalHandler(uid,uname,args) {
 function testGoalHandler() {
   // test goalHandler()
   var uid = "Uxxxxxxxx";
-  var uname = "nobody";  
+  var uname = "nobody";
 
   // usage: /goal help
-  args = "help";  
+  args = "help";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
+
+  result = goalHandler(uid,uname,args);
+
   Logger.log("- %s.",result.getContent());
-  
+
   // usage: /goal connect
-  args = "connect";  
+  args = "connect";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
+
+  result = goalHandler(uid,uname,args);
+
   Logger.log("- %s.",result.getContent());
-  
+
   // usage: /goal
-  var args = "";  
+  var args = "";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
+
   var result = goalHandler(uid,uname,args);
-  
+
   Logger.log("- %s.",result.getContent());
-  
+
   // usage; /goal @uname
-  args = "<@" + uid + "|" + uname + "> ";  
+  args = "<@" + uid + "|" + uname + "> ";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
+
+  result = goalHandler(uid,uname,args);
+
   Logger.log("- %s.",result.getContent());
-  
+
   // usage: /goal lorem ipsum
-  args = "lorem ipsum";  
+  args = "lorem ipsum";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
+
+  result = goalHandler(uid,uname,args);
+
   Logger.log("- %s.",result.getContent());
-  
+
   // usage: /goal @uname lorem ipsum
-  args = "<@" + uid + "|" + uname + "> lorem ipsum";  
+  args = "<@" + uid + "|" + uname + "> lorem ipsum";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
+
+  result = goalHandler(uid,uname,args);
+
   Logger.log("- %s.",result.getContent());
-  
+
   // test unknonw user...
   uid = "Uyyyyyyyy";
   uname = "noname";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
-  
-  result = goalHandler(uid,uname,args); 
-  
-  Logger.log("- %s.",result.getContent()); 
+
+  result = goalHandler(uid,uname,args);
+
+  Logger.log("- %s.",result.getContent());
 }
 
 function scoreHandler(uid,uname,args) {
@@ -317,7 +317,7 @@ function getUser(uid) {
   // check that uid is known to us
   var ss = SpreadsheetApp.openById(sheetId());
   var s = ss.getSheetByName("Sheet1");
-  
+
   var row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
 
   return (typeof(row) != "undefined"); // return true for know users
@@ -325,47 +325,47 @@ function getUser(uid) {
 
 function testGetUser() {
   // test getUser()
-  
+
   // known user
   uid = "Uxxxxxxxx";
   Logger.log("Testing getUser(%s)",uid);
-  
+
   var result = getUser(uid);
-  
+
   Logger.log("- %s.",result);
 
-  // unknown user  
+  // unknown user
   uid = "UUnknownUser";
   Logger.log("Testing getUser(%s)",uid);
-  
+
   var result = getUser(uid);
-  
+
   Logger.log("- %s.",result);
 }
 
 function addUser(uid,uname) { // OK
   // add a new user and return backend settings
   var ss = SpreadsheetApp.openById(sheetId());
-  
+
   // 1. find candidate entry on the score sheet
   var s = ss.getSheetByName("Sheet1");
-  
+
   var row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
-    
+
   if (row != null) { // FIXME: row is actually 'undefined'
     // user exists...?
     return row;
   }
-  
+
   // 2. user is unknown... but use some huristics here to see if we have any close matches
   Logger.log("User %s (%s) is unknown.",uid,uname);
-  
+
   // loop over known writers and see if any "match" the supplied slack user name
   var col = getColumnByName(s,["Writer"]);
-  
+
   var range = s.getDataRange();
   var nRows = range.getHeight();
-  
+
   writerloop:
   for (row = 1; row <= nRows; row++) { // getHeight()
     var writer = range.getCell(row,col).getDisplayValue(); // col is the "Writer" column
@@ -374,17 +374,17 @@ function addUser(uid,uname) { // OK
       // empty cell...
       continue
     }
-    
+
     var re = new RegExp(".*"+writer+".*","i"); // case insensitive
     if (re.test(uname)) {
       // writer might be our new/unknown user...
       //
       // 1. check that this writers uid field is empty
-      // 2. if so, appropriate the existing record by assigning the current uid to this writer, 
+      // 2. if so, appropriate the existing record by assigning the current uid to this writer,
       var uid_ = getRow(s,row,["Slack UID"])[0];
-      
+
       Logger.log("User %s (%s) might be %s (uid:%s).",uid,uname,writer,uid_);
-      
+
       if (uid_.length === 0) {
         Logger.log("Ok. Appropriating %s to be %s (%s).",writer,uid,uname);
         setRow(s,row,["Slack UID"],[uid]);
@@ -392,17 +392,17 @@ function addUser(uid,uname) { // OK
       }
     }
   }
-  
+
   row = getRowByColumn(s,["Slack UID"],[uid])[0]; // first matching entry
-  
+
   if (row == null) { // FIXME: row is 'undefined'
-    // no entry found... create a new row    
+    // no entry found... create a new row
     s.insertRowAfter(nRows); // append row at the bottom (inherits formatting)
-    
+
     row = nRows + 1;
     setRow(s,row,["Slack UID","Writer"],[uid,uname]);
   }
-      
+
   // 3. find/create the users history sheet
   var h = ss.getSheetByName(uid);
   if (h == null) {
@@ -411,9 +411,9 @@ function addUser(uid,uname) { // OK
 //    ss.insertSheet(uid, {template: template});
     ss.insertSheet(uid);
     h = ss.getSheetByName(uid);
-    h.appendRow(["Date","Goal","Score"]); // column headings    
+    h.appendRow(["Date","Goal","Score"]); // column headings
   }
-  
+
   // copy any existing goal to the history sheet
   h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
   setRow(h,h.getLastRow()+1,["Date","Goal"],getRow(s,row,["Date","Goal"]));
@@ -425,12 +425,12 @@ function testAddUser() {
   // test addUser()
   var ss = SpreadsheetApp.openById(sheetId());
   uid = "Uxxxxxxxx";
-  uname = "nobody";  
-  
+  uname = "nobody";
+
   Logger.log("Testing addUser(%s,%s,%s)",ss.getName(),uid,uname);
-  
+
   var result = addUser(ss,uid,uname);
-  
+
   Logger.log("- %s.",result);
 }
 
@@ -439,21 +439,21 @@ function setCurrentGoal(uid,goal) {
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
 
   var s = ss.getSheetByName("Sheet1"); // FIXME
-  
+
   var row = getRowByColumn(s,["Slack UID"],[uid])[0];
-  
+
   if (row == null) {
 //    var row = addUser(ss,uid,uname);
     return mkUserErrorMsg(); // shouldn't ever end up here!
   }
-  
+
   setRow(s,row,["Date","Goal"],[new Date(),goal]);
-  
+
   // update the history sheet
   var h = ss.getSheetByName(uid);
   h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
   setRow(h,h.getLastRow()+1,["Date","Goal"],[new Date(),goal]);
-  
+
 //  return ContentService.createTextOutput("Ok, got it!"); // FIXME: echo the goal to the channel instead?
   return mkGeneralMsg("Ok, got it!",true); // true = display in channel
 }
@@ -462,42 +462,42 @@ function testSetCurrentGoal() {
   // test setCurrentGoal()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
-    
+
   var row = getRowByColumn(s,["Writer"],["nobody"]);
   var uid = getRow(s,row,["Slack UID"]);
-  
+
   var goal = "lorem ipsum";
 
   // known user
   Logger.log("Testing setCurrentGoal(%s,%s)",uid,goal);
-  
+
   var result = setCurrentGoal(uid,goal);
-  
+
   Logger.log("- %s",result.getContent());
-  
+
   // unknown user
   uid = "UUnknownUser";
   Logger.log("Testing setCurrentGoal(%s,%s)",uid,goal);
-  
+
   var result = setCurrentGoal(uid,goal);
-  
+
   Logger.log("- %s",result.getContent());
 }
 
-function getCurrentGoal(uid) {  
+function getCurrentGoal(uid) {
   var ss = SpreadsheetApp.openById(sheetId());
   SpreadsheetApp.setActiveSpreadsheet(ss); // handy...?
-  
+
   var s = ss.getSheetByName("Sheet1"); // FIXME
 
   var row = getRowByColumn(s,["Slack UID"],[uid])[0];
-      
+
   if (row == null) {
     return mkGeneralMsg("I don't know <@" + uid + ">."); // FIXME: uid isn't know to us...
   }
-  
+
   var goal = getRow(s,row,["Goal"])[0];
-  
+
   return mkGeneralMsg(goal);
 }
 
@@ -505,23 +505,23 @@ function testGetCurrentGoal() {
   // test getCurrentGoal()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
-  
+
   var row = getRowByColumn(s,["Writer"],["Shaun"]);
   var uid = getRow(s,row,["Slack UID"]);
-  
+
   // known user
   Logger.log("Testing getCurrentGoal(%s)",uid);
-  
+
   var result = getCurrentGoal(uid);
-  
+
   Logger.log("- %s",result.getContent());
-  
-  // unknown user  
+
+  // unknown user
   uid = "UUnknownUser";
   Logger.log("Testing getCurrentGoal(%s)",uid);
-  
+
   var result = getCurrentGoal(uid);
-  
+
   Logger.log("- %s",result.getContent());
 }
 
@@ -562,7 +562,7 @@ function getColumnByName(s,name) { // OK
       }
     } // col
   } // row
-  
+
   return idx
 }
 
@@ -571,11 +571,11 @@ function testGetColumnByName() {
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
   name = ["Writer"];
-  
+
   Logger.log("Testing getColumnByName(%s,%s)",s.getName(),name);
-  
+
   var result = getColumnByName(s,name);
-  
+
   Logger.log("- %s",result);
 }
 
@@ -601,9 +601,9 @@ function getRowByColumn(s,name,value) { // OK
         idx.push(row);
       }
     });
-    
+
   }
-    
+
   return idx;
 }
 
@@ -613,69 +613,69 @@ function testGetRowByColumn() {
   s = ss.getSheetByName("Sheet1");
   name = ["Writer"];
   value = ["Shaun"];
-  
+
   Logger.log("Testing getRowByColumn(%s,%s,%s)",s.getName(),name,value);
-  
+
   var result = getRowByColumn(s,name,value);
-  
+
   Logger.log("- %s",result);
 }
 
 
 function setRow(s,row,name,value) { // SET name = value WHERE row; OK
   // set column name(s) to value(s) on row
-  
+
 //  var range = s.getDataRange();
   var range = s.getRange(1,1,row,s.getLastColumn()); // in case row is empty and therefore not included by getDataRange()
-  
+
   var nRows = range.getHeight();
-    
+
   var col = getColumnByName(s,name); // column indicies
-  
+
   for (var i = 0; i < col.length; i++) {
     var cell = range.getCell(row,col[i]);
     cell.setValue(value[i]);
-  }  
+  }
 }
 
 function testSetRow() {
-  // test setRow()  
+  // test setRow()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
   row = getRowByColumn(s,["Writer"],["Shaun"]);
   name = ["Goal"];
   value = ["A new goal for Shaun."];
-    
+
   Logger.log("Testing setRow(%s,%s,%s,%s)",s.getName(),row,name,value);
-  
+
   var result = setRow(s,row,name,value);
-  
+
   Logger.log("- %s",result);
 }
 
 function getRow(s,row,name) { // SELECT name WHERE row; OK
   // get value(s) from column name(s) on row
-    
+
   var range = s.getDataRange();
-  
+
   var value = getColumnByName(s,name).map(function (col) {
     return range.getCell(row,col).getValue();
   });
-    
+
   return value;
 }
 
 function testGetRow() {
-  // test getRow()  
+  // test getRow()
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
   row = getRowByColumn(s,["Writer"],["Shaun"]);
   name = ["Writer","Goal"];
-  
+
   Logger.log("Testing getRow(%s,%s,%s)",s.getName(),row,name);
-  
+
   var result = getRow(s,row,name);
-  
+
   Logger.log("- %s",result);
 }
 
@@ -685,19 +685,33 @@ function testGetRow() {
 
 function mkHelpMsg() {
   // build the help action response
-  
+
   var attachment = {
     color: "good",
-    text: "Help text does here...",
-    mrkdwn_in: ["text"]
+    text: "Use `/goal` to manage your writing goal. For example:",
+    fields: [
+      {
+        value: "* `/goal` Do more stuff.\n* `/goal`\n* `/goal @user`\n",
+        short: true
+      },
+      {
+        value: "will set a new goal.\nwill return your current goal.\nwill return @user's goal.\n",
+        short: true
+      },
+      {
+        value: "For more, msg <@" + feedbackUid() + ">.",
+        short: false
+      }
+    ],
+    mrkdwn_in: ["text","fields"]
   };
-  
+
   var response = {
     response_type: "ephemeral",
     text: "",
     attachments: [ attachment ]
-  }; 
-  
+  };
+
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -711,7 +725,7 @@ function mkHelpAttachment(msg) {
 
 function mkConnectMsg(uid,uname) {
   // build the connect action response
-  
+
   var attachment = {
     fallback: "Click to connect.",
     color: "good",
@@ -725,13 +739,13 @@ function mkConnectMsg(uid,uname) {
     } ],
     mrkdn_in: [ "text" ]
   };
-  
+
   var response = {
     response_type: "ephemeral",
     text: "You have goals? Awesome!",
     attachments: [ attachment ]
   }
-  
+
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -744,8 +758,8 @@ function mkErrorMsg(msg) {
     response_type: "ephemeral",
     text: "",
     attachments: [ mkErrorAttachment(msg) ]
-  }; 
-  
+  };
+
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -762,11 +776,11 @@ function mkGeneralMsg(msg,inChannel) {
   if (inChannel) {
     response_type = "in_channel";
   }
-  
+
   var response = {
     response_type: response_type,
     text: msg
   }
-    
-  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);    
+
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
