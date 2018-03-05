@@ -657,9 +657,10 @@ function getRow(s,row,name) { // SELECT name WHERE row; OK
 function testGetRow() {
   // test getRow()
   var ss = SpreadsheetApp.openById(sheetId());
-  s = ss.getSheetByName("Sheet1");
-  row = getRowByColumn(s,["Writer"],["nobody"]);
-  name = ["Writer","Goal"];
+  var s = ss.getSheetByName("Sheet1");
+
+  var row = getRowByColumn(s,["Writer"],["Shaun"]);
+  var name = ["Writer","Goal"];
 
   Logger.log("Testing getRow(%s,%s,%s)",s.getName(),row,name);
 
