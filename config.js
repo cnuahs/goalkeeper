@@ -1,4 +1,4 @@
-// GoalKeeper web app configuration script
+// GoalKeeper app for slack... configuration script
 
 // 2018-03-02 - Shaun L. Cloherty <s.cloherty@ieee.org>
 
@@ -7,9 +7,13 @@ function slackToken() {
 }
 
 function sheetId() {
-  return ""; // google sheet id
+  return ""; // google sheet id (testing)
 }
 
 function feedbackUid() {
   return ""; // slack uid for feedback
+}
+
+function webhookUrl() {
+  return null; // [optional] slack webhook
 }

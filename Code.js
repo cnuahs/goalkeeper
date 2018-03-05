@@ -6,11 +6,13 @@ function doPost(e) {
   // HTTP POST endpoint
   if (e.parameter.hasOwnProperty("payload")) {
     // this is an interactive message... payload is json
-    return msgHandler(JSON.parse(e.parameter.payload));
+    var response = msgHandler(JSON.parse(e.parameter.payload));
   } else {
     // this is a slash command
-    return cmdHandler(e.parameter);
+    var response = cmdHandler(e.parameter);
   }
+  
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function msgHandler(payload) {
@@ -43,16 +45,15 @@ function msgHandler(payload) {
     text: "Ok, got it!"
   };
 
-  var options = {
-    method: "post",
-    contentType : "application/json",
-    payload: JSON.stringify(msg)
-  };
-
-  // I don't think this is a sanctioned use of the response_url... we should be
-  // responding with an empty HTTP 200, but Google Apps Script is synchronous so I'm fudging it
-  var response = UrlFetchApp.fetch(payload.response_url,options);
-
+  // adduser() can take a while, longer than the 3s slack allows for
+  // a response. To avoid the user getting a timeout/failure message,
+  // here we respond straight away, and *then* call addUser().
+  //
+  // I don't think this is a sanctioned use of the response_url... we
+  // should be responding with an empty HTTP 200, but Google's Apps
+  // Script is synchronous so I'm fudging it
+  var response = postToUrl(payload.response_url,msg);
+  
   addUser(payload.user.id,payload.user.name);
 
 //  msg = {
@@ -66,10 +67,8 @@ function msgHandler(payload) {
 //    }
 //  };
 //
-//  options.payload = JSON.stringify(msg);
-//
-//  response = UrlFetchApp.fetch(payload.response_url,options);
-//
+//  response = postToUrl(payload.response_url,msg);
+  
 //  return mkGeneralMsg("Ok, got it!");
 }
 
@@ -108,7 +107,7 @@ function cmdHandler(payload) {
   }
 
   // shouldn't be possible to end up here...
-  return ContentService.createTextOutput("Got POST on "+ new Date() + " for " + payload.command + ".");
+  return mkGeneralMsg("Got POST on "+ new Date() + " for " + payload.command + ".");
 }
 
 function goalHandler(uid,uname,args) {
@@ -118,7 +117,7 @@ function goalHandler(uid,uname,args) {
   //
   //   /goal <-- return current goal (user only, not displayed in channel)
   //   /goal @user <-- return current goal for @user (user only, not in channel)
-  //   /goal new goal <-- set current goal to 'new goal' (shows in channel)
+  //   /goal new goal <-- set current goal to 'new goal' (posts to channel/webhook)
   //   /goal @user new goal <-- set current goal for @user (shows in channel)? [NOT SUPPORTED]
   //
   //   /goal help
@@ -144,8 +143,12 @@ function goalHandler(uid,uname,args) {
         // return help msg
         return mkHelpMsg();
       case 1: // connect
-        // return connect msg/prompt
-        return mkConnectMsg();
+        // return connect msg/prompt?
+        if (!getUser(uid)) {
+          return mkConnectMsg();
+        } else {
+          return mkErrorMsg("You're already connected... try `/goal help` to get started.");
+        }
     }
   }
 
@@ -183,12 +186,12 @@ function testGoalHandler() {
   var uname = "nobody";
 
   // usage: /goal help
-  args = "help";
+  var args = "help";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
 
-  result = goalHandler(uid,uname,args);
+  var result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // usage: /goal connect
   args = "connect";
@@ -196,15 +199,15 @@ function testGoalHandler() {
 
   result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // usage: /goal
-  var args = "";
+  args = "";
   Logger.log("Testing goalHandler(%s,%s,%s)",uid,uname,args);
 
-  var result = goalHandler(uid,uname,args);
+  result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // usage; /goal @uname
   args = "<@" + uid + "|" + uname + "> ";
@@ -212,7 +215,7 @@ function testGoalHandler() {
 
   result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // usage: /goal lorem ipsum
   args = "lorem ipsum";
@@ -220,7 +223,7 @@ function testGoalHandler() {
 
   result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // usage: /goal @uname lorem ipsum
   args = "<@" + uid + "|" + uname + "> lorem ipsum";
@@ -228,7 +231,7 @@ function testGoalHandler() {
 
   result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 
   // test unknown user...
   uid = "UUnknownUser";
@@ -237,7 +240,7 @@ function testGoalHandler() {
 
   result = goalHandler(uid,uname,args);
 
-  Logger.log("- %s.",result.getContent());
+  Logger.log("- %s.",result);
 }
 
 function scoreHandler(uid,uname,args) {
@@ -246,10 +249,12 @@ function scoreHandler(uid,uname,args) {
   // possible variants:
   //
   //   /score <-- return current users score (user only, not in channel)
-  //   /score @user <-- return the score for @user (user only, not in nchannel)
+  //   /score @user <-- return the score for @user (user only, not in channel)
   //   /score @user score <-- set the score for @user (note: cannot set your own score) (shows in channel)
   //
   //   /score help
+  
+  return mkGeneralMsg("Who's keeping score?");
 }
 
 function parseArgs(args) {
@@ -425,7 +430,14 @@ function setCurrentGoal(uid,goal) {
   h.insertRowAfter(h.getLastRow()); // append row at the bottom (inherits formatting)
   setRow(h,h.getLastRow()+1,["Date","Goal"],[new Date(),goal]);
 
-  return mkGeneralMsg("Ok, got it!",true); // true = display in channel
+  // post msg to webhook... in_channel - goes to everyone
+  var url = webhookUrl();
+  if (url) {
+    var msg = Utilities.formatString("<@%s> set a new goal: %s",uid,goal);
+    postToUrl(url,mkGeneralMsg(msg));
+  }
+  
+  return mkGeneralMsg("Ok, got it!"); // ephemeral - goes to the user only
 }
 
 function testSetCurrentGoal() {
@@ -443,7 +455,7 @@ function testSetCurrentGoal() {
 
   var result = setCurrentGoal(uid,goal);
 
-  Logger.log("- %s",result.getContent());
+  Logger.log("- %s",result);
 
   // unknown user
   uid = "UUnknownUser";
@@ -451,7 +463,7 @@ function testSetCurrentGoal() {
 
   var result = setCurrentGoal(uid,goal);
 
-  Logger.log("- %s",result.getContent());
+  Logger.log("- %s",result);
 }
 
 function getCurrentGoal(uid) {
@@ -466,9 +478,18 @@ function getCurrentGoal(uid) {
     return mkGeneralMsg("I don't know <@" + uid + ">."); // uid isn't known to us...
   }
 
-  var goal = getRow(s,row,["Goal"])[0];
+  var goal = getRow(s,row,["Goal","Date"]);
 
-  return mkGeneralMsg(goal);
+  var msg = "Goal for <@" + uid + ">: " + goal[0];
+  
+  if (goal[1]) {
+    var days = Math.floor((new Date() - goal[1])/(24*60*60*1000)); // converts milliseconds to days
+    msg = msg + " (set " + days + " days ago)";
+  }
+  
+//  msg = msg + ".";
+  
+  return mkGeneralMsg(msg);
 }
 
 function testGetCurrentGoal() {
@@ -476,23 +497,21 @@ function testGetCurrentGoal() {
   var ss = SpreadsheetApp.openById(sheetId());
   s = ss.getSheetByName("Sheet1");
 
-  var row = getRowByColumn(s,["Writer"],["Uxxxxxxxx"]);
-  var uid = getRow(s,row,["Slack UID"]);
-
   // known user
+  var uid = "Uxxxxxxxx";
   Logger.log("Testing getCurrentGoal(%s)",uid);
 
   var result = getCurrentGoal(uid);
 
-  Logger.log("- %s",result.getContent());
+  Logger.log("- %s",result);
 
   // unknown user
   uid = "UUnknownUser";
   Logger.log("Testing getCurrentGoal(%s)",uid);
 
-  var result = getCurrentGoal(uid);
+  result = getCurrentGoal(uid);
 
-  Logger.log("- %s",result.getContent());
+  Logger.log("- %s",result);
 }
 
 function getColumnByName(s,name) { // OK
@@ -661,7 +680,7 @@ function mkHelpMsg() {
     text: "Use `/goal` to manage your writing goal. For example:",
     fields: [
       {
-        value: "* `/goal` Do more stuff.\n* `/goal`\n* `/goal @user`\n",
+        value: "* `/goal` Write something.\n* `/goal`\n* `/goal @user`\n",
         short: true
       },
       {
@@ -669,20 +688,18 @@ function mkHelpMsg() {
         short: true
       },
       {
-        value: "For more, msg <@" + feedbackUid() + ">.",
+        value: "Comments or questions: <@" + feedbackUid() + ">.",
         short: false
       }
     ],
     mrkdwn_in: ["text","fields"]
   };
 
-  var response = {
+  return ( {
     response_type: "ephemeral",
     text: "",
     attachments: [ attachment ]
-  };
-
-  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+  } );
 }
 
 function mkHelpAttachment(msg) {
@@ -710,13 +727,11 @@ function mkConnectMsg() {
     mrkdn_in: [ "text" ]
   };
 
-  var response = {
+  return ( {
     response_type: "ephemeral",
     text: "You have goals? Awesome!",
     attachments: [ attachment ]
-  }
-
-  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+  } );
 }
 
 function mkUserErrorMsg() {
@@ -724,13 +739,11 @@ function mkUserErrorMsg() {
 }
 
 function mkErrorMsg(msg) {
-  var response = {
+  return ( {
     response_type: "ephemeral",
     text: "",
     attachments: [ mkErrorAttachment(msg) ]
-  };
-
-  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+  } );
 }
 
 function mkErrorAttachment(msg) {
@@ -747,10 +760,42 @@ function mkGeneralMsg(msg,inChannel) {
     response_type = "in_channel";
   }
 
-  var response = {
+  return ( {
     response_type: response_type,
     text: msg
-  }
+  } );
+}
 
-  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+function postToUrl(url,payload) {
+  // POST payload (after json encoding) to url, e.g., a webhook or
+  // response_url for sending delayed responses
+  
+//  var payload = {
+//    response_type: "ephemeral",
+//    text: "Ok, got it!"
+//  };
+
+  var options = {
+    method: "post",
+    contentType : "application/json",
+    payload: JSON.stringify(payload)
+  };
+
+  return UrlFetchApp.fetch(url,options);
+}
+
+function testPostToUrl() {
+  // test postToUrl()
+  var url = ""; // https://requestb.in/[blah blah blah] or similar
+  
+  msg = {
+    field1: "value1",
+    field2: "value2"
+  };
+  
+  Logger.log("Testing postToUrl(%s,%s)",url,msg);
+  
+  var response = postToUrl(url,msg);
+  
+  Logger.log("- %s",response);
 }
