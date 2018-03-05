@@ -2,18 +2,18 @@
 
 // 2018-03-02 - Shaun L. Cloherty <s.cloherty@ieee.org>
 
-function slackToken() {
-  return "";   // slack verification token
+function slackToken() { // (required) slack verification token
+  return "";
 }
 
-function sheetId() {
-  return ""; // google sheet id (testing)
+function sheetId() { // (required) google sheet id
+  return "";
 }
 
-function feedbackUid() {
-  return ""; // slack uid for feedback
+function feedbackUid() { // (optional) slack uid for feedback
+  return "";
 }
 
-function webhookUrl() {
-  return null; // [optional] slack webhook
+function webhookUrl() { // (optional) slack webhook
+  return null;
 }
