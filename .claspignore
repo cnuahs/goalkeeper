@@ -2,4 +2,7 @@
 !build/Main.js
 !appsscript.json
 !Code.js
+!sheetops.js
+!httpops.js
+!msgs.js
 !config.js

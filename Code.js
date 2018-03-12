@@ -11,7 +11,7 @@ function doPost(e) {
     // this is a slash command
     var response = cmdHandler(e.parameter);
   }
-  
+
   return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -35,7 +35,7 @@ function msgHandler(payload) {
   //     response_url: "~",
   //     trigger_id: "~"
   //    }
-  
+
   if (payload.token != slackToken()) {
     return mkErrorMsg("Verification failed.");
   }
@@ -53,7 +53,7 @@ function msgHandler(payload) {
   // should be responding with an empty HTTP 200, but Google's Apps
   // Script is synchronous so I'm fudging it
   var response = postToUrl(payload.response_url,msg);
-  
+
   addUser(payload.user.id,payload.user.name);
 
 //  msg = {
@@ -68,7 +68,7 @@ function msgHandler(payload) {
 //  };
 //
 //  response = postToUrl(payload.response_url,msg);
-  
+
 //  return mkGeneralMsg("Ok, got it!");
 }
 
@@ -90,7 +90,7 @@ function cmdHandler(payload) {
   //     channel_id: "Cxxxxxxxx"
   //     text: ""
   //   }
-  
+
   if (payload.token != slackToken()) {
     return mkErrorMsg("Verification failed.");
   }
@@ -253,7 +253,7 @@ function scoreHandler(uid,uname,args) {
   //   /score @user score <-- set the score for @user (note: cannot set your own score) (shows in channel)
   //
   //   /score help
-  
+
   return mkGeneralMsg("Who's keeping score?");
 }
 
@@ -436,7 +436,7 @@ function setCurrentGoal(uid,goal) {
     var msg = Utilities.formatString("<@%s> set a new goal: %s",uid,goal);
     postToUrl(url,mkGeneralMsg(msg));
   }
-  
+
   return mkGeneralMsg("Ok, got it!"); // ephemeral - goes to the user only
 }
 
@@ -481,14 +481,14 @@ function getCurrentGoal(uid) {
   var goal = getRow(s,row,["Goal","Date"]);
 
   var msg = "Goal for <@" + uid + ">: " + goal[0];
-  
+
   if (goal[1]) {
     var days = Math.floor((new Date() - goal[1])/(24*60*60*1000)); // converts milliseconds to days
     msg = msg + " (set " + days + " days ago)";
   }
-  
+
 //  msg = msg + ".";
-  
+
   return mkGeneralMsg(msg);
 }
 
@@ -512,291 +512,4 @@ function testGetCurrentGoal() {
   result = getCurrentGoal(uid);
 
   Logger.log("- %s",result);
-}
-
-function getColumnByName(s,name) { // OK
-  // find column(s) by name, returning column number(s)
-  var range = s.getDataRange();
-
-  var nRows = range.getHeight();
-  var nCols = range.getWidth();
-
-  // first nonempty row contains column headings...
-  rowloop:
-  for (var row = 1; row <= nRows; row++) {
-    for (var col = 1; col <= nCols; col++) {
-      var value = range.getCell(row,col).getDisplayValue();
-      if (value) {
-        // first non-empty cell
-        var headings = s.getRange(row,col,1,nCols-col+1).getValues()[0];
-
-        name = name.map(function(n) {
-          if (typeof(n) == "RegExp") {
-            return n;
-          } else {
-            return new RegExp(n,"i");
-          }
-        });
-
-        // look for our column heading... colName
-        var idx = name.map(function(re) {
-          for (var i = 0; i < headings.length; i++) {
-            if (re.test(headings[i])) {
-              return i + col;
-            }
-          }
-        });
-
-        break rowloop;
-      }
-    } // col
-  } // row
-
-  return idx
-}
-
-function testGetColumnByName() {
-  // test getColumnByName()
-  var ss = SpreadsheetApp.openById(sheetId());
-  s = ss.getSheetByName("Sheet1");
-  name = ["Writer"];
-
-  Logger.log("Testing getColumnByName(%s,%s)",s.getName(),name);
-
-  var result = getColumnByName(s,name);
-
-  Logger.log("- %s",result);
-}
-
-function getRowByColumn(s,name,value) { // OK
-  // find row by contents of column name, returning row number
-  var range = s.getDataRange();
-
-  var nRows = range.getHeight();
-  var nCols = range.getWidth();
-
-  var col = getColumnByName(s,name)[0]; // column index
-
-  if (col == null) {
-    return null; // column not found?
-  }
-
-  var idx = new Array();
-  for (var row = 1; row <= nRows; row++) {
-    var val = range.getCell(row,col).getValue();
-
-    value.forEach(function(v) {
-      if (v == val) {
-        idx.push(row);
-      }
-    });
-
-  }
-
-  return idx;
-}
-
-function testGetRowByColumn() {
-  // test getRowByColumn()
-  var ss = SpreadsheetApp.openById(sheetId());
-  s = ss.getSheetByName("Sheet1");
-  name = ["Writer"];
-  value = ["nobody"];
-
-  Logger.log("Testing getRowByColumn(%s,%s,%s)",s.getName(),name,value);
-
-  var result = getRowByColumn(s,name,value);
-
-  Logger.log("- %s",result);
-}
-
-
-function setRow(s,row,name,value) { // SET name = value WHERE row; OK
-  // set column name(s) to value(s) on row
-
-//  var range = s.getDataRange();
-  var range = s.getRange(1,1,row,s.getLastColumn()); // in case row is empty and therefore not included by getDataRange()
-
-  var nRows = range.getHeight();
-
-  var col = getColumnByName(s,name); // column indicies
-
-  for (var i = 0; i < col.length; i++) {
-    var cell = range.getCell(row,col[i]);
-    cell.setValue(value[i]);
-  }
-}
-
-function testSetRow() {
-  // test setRow()
-  var ss = SpreadsheetApp.openById(sheetId());
-  s = ss.getSheetByName("Sheet1");
-  row = getRowByColumn(s,["Writer"],["nobody"]);
-  name = ["Goal"];
-  value = ["A new goal."];
-
-  Logger.log("Testing setRow(%s,%s,%s,%s)",s.getName(),row,name,value);
-
-  var result = setRow(s,row,name,value);
-
-  Logger.log("- %s",result);
-}
-
-function getRow(s,row,name) { // SELECT name WHERE row; OK
-  // get value(s) from column name(s) on row
-
-  var range = s.getDataRange();
-
-  var value = getColumnByName(s,name).map(function (col) {
-    return range.getCell(row,col).getValue();
-  });
-
-  return value;
-}
-
-function testGetRow() {
-  // test getRow()
-  var ss = SpreadsheetApp.openById(sheetId());
-  var s = ss.getSheetByName("Sheet1");
-
-  var row = getRowByColumn(s,["Writer"],["Shaun"]);
-  var name = ["Writer","Goal"];
-
-  Logger.log("Testing getRow(%s,%s,%s)",s.getName(),row,name);
-
-  var result = getRow(s,row,name);
-
-  Logger.log("- %s",result);
-}
-
-//
-// response formatting
-//
-
-function mkHelpMsg() {
-  // build the help action response
-
-  var attachment = {
-    color: "good",
-    text: "Use `/goal` to manage your writing goal. For example:",
-    fields: [
-      {
-        value: "* `/goal` Write something.\n* `/goal`\n* `/goal @user`\n",
-        short: true
-      },
-      {
-        value: "will set a new goal.\nwill return your current goal.\nwill return @user's goal.\n",
-        short: true
-      },
-      {
-        value: "Comments or questions: <@" + feedbackUid() + ">.",
-        short: false
-      }
-    ],
-    mrkdwn_in: ["text","fields"]
-  };
-
-  return ( {
-    response_type: "ephemeral",
-    text: "",
-    attachments: [ attachment ]
-  } );
-}
-
-function mkHelpAttachment(msg) {
-  return ({
-    color: "good",
-    text: msg,
-    mrkdwn_in: ["text"]
-  })
-}
-
-function mkConnectMsg() {
-  // build the connect action response
-
-  var attachment = {
-    fallback: "Click to connect.",
-    color: "good",
-    text: "Click the button below to connect with the GoalKeeper...",
-    callback_id: "connect_button",
-    actions: [ {
-        type: "button",
-        text: "Connect",
-        name: "connect",
-        value: "connect",
-    } ],
-    mrkdn_in: [ "text" ]
-  };
-
-  return ( {
-    response_type: "ephemeral",
-    text: "You have goals? Awesome!",
-    attachments: [ attachment ]
-  } );
-}
-
-function mkUserErrorMsg() {
-  return mkErrorMsg("I don't know you... try `/goal connect` so we can get aquainted.");
-}
-
-function mkErrorMsg(msg) {
-  return ( {
-    response_type: "ephemeral",
-    text: "",
-    attachments: [ mkErrorAttachment(msg) ]
-  } );
-}
-
-function mkErrorAttachment(msg) {
-  return ({
-    color: "danger",
-    text: "*Error*:\n" + msg,
-    mrkdwn_in: ["text"]
-  })
-}
-
-function mkGeneralMsg(msg,inChannel) {
-  var response_type = "ephemeral"
-  if (inChannel) {
-    response_type = "in_channel";
-  }
-
-  return ( {
-    response_type: response_type,
-    text: msg
-  } );
-}
-
-function postToUrl(url,payload) {
-  // POST payload (after json encoding) to url, e.g., a webhook or
-  // response_url for sending delayed responses
-  
-//  var payload = {
-//    response_type: "ephemeral",
-//    text: "Ok, got it!"
-//  };
-
-  var options = {
-    method: "post",
-    contentType : "application/json",
-    payload: JSON.stringify(payload)
-  };
-
-  return UrlFetchApp.fetch(url,options);
-}
-
-function testPostToUrl() {
-  // test postToUrl()
-  var url = ""; // https://requestb.in/[blah blah blah] or similar
-  
-  msg = {
-    field1: "value1",
-    field2: "value2"
-  };
-  
-  Logger.log("Testing postToUrl(%s,%s)",url,msg);
-  
-  var response = postToUrl(url,msg);
-  
-  Logger.log("- %s",response);
 }
